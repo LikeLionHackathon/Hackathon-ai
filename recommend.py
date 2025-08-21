@@ -1,5 +1,15 @@
+# recommend.py
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
+from fastapi import UploadFile, HTTPException
+import base64, os
+from dotenv import load_dotenv
+from openai import OpenAI
+
+load_dotenv()
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+EXHBITION_STORE_ID = os.getenv("EXHIBITION_STORE_ID")
+
 
 class Exhibition(BaseModel):
     id: Optional[str] = None
@@ -13,75 +23,102 @@ class Exhibition(BaseModel):
     tags: Optional[List[str]] = None
     recommendationReason: Optional[str] = None
 
-import os
-from dotenv import load_dotenv
-load_dotenv()
-from openai import OpenAI
+# ✅ 리스트 래퍼
+class ExhibitionList(BaseModel):
+    items: List[Exhibition]
 
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-from typing import List, Dict, Optional
 
-def analyze_exhibition_with_images_and_fs(
-    prompt: str,
-    image_blobs: List[bytes],                # 이미지 바이트 리스트
-    vector_store_id: Optional[str] = None,
-) -> Exhibition:
-    # 벡터 스토어 ID 확정 (인자 > 환경변수)
-    vs_id = vector_store_id
-    if not vs_id:
-        raise ValueError(
-            "VECTOR_STORE_ID is not set. Pass vector_store_id to the function or set it in your environment/.env."
+
+
+# def analyze_exhibition_with_images_and_fs(
+#     prompt: str,
+#     image_blobs: List[bytes],
+#     vector_store_id: Optional[str] = None,
+# ) -> List[Exhibition]:  # ← 리스트로 변경
+#     if not vector_store_id:
+#         raise ValueError("VECTOR_STORE_ID is not set.")
+
+#     content_blocks: List[Dict] = [{"type": "input_text", "text": prompt}]
+#     for data in image_blobs:
+#         b64 = base64.b64encode(data).decode("ascii")
+#         content_blocks.append({
+#             "type": "input_image",
+#             "image_data": {"data": b64, "mime_type": "image/png"}
+#         })
+
+#     req = {
+#         "model": "gpt-4.1-mini",
+#         "tools": [{"type": "file_search",
+#                    "vector_store_ids": [vector_store_id]}],
+#         "input": [{"role": "user", "content": content_blocks}],
+#         "text_format": ExhibitionList,   # ← 다중 항목 파싱
+#     }
+#     _assert_no_bytes(req)
+
+#     resp = client.responses.parse(**req)
+#     return resp.output_parsed.items  # List[Exhibition]
+
+
+# def process_images(
+#     images_info: List[dict],
+#     text: Optional[str] = None,
+#     vector_store_id: Optional[str] = None
+# ) -> List[Exhibition]:  # ← 리스트로 변경
+#     image_blobs: List[bytes] = []
+#     for info in images_info or []:
+#         data = info.get("_bytes") or info.get("bytes")
+#         if data:
+#             image_blobs.append(data)
+
+#     prompt = (
+#         f"{text} 이미지를 참고해 내 전시 지식에서 **가장 잘 맞는 전시 여러 개**를 추천해줘. "
+#         "각 항목마다 이유와 관련 태그 포함."
+#         if text else
+#         "이미지를 참고해 내 전시 지식에서 **가장 잘 맞는 전시 여러 개**를 추천해줘. 각 항목마다 이유와 관련 태그 포함."
+#     )
+
+#     return analyze_exhibition_with_images_and_fs(
+#         prompt=prompt,
+#         image_blobs=image_blobs,
+#         vector_store_id=vector_store_id,
+#     )
+
+def ask_with_images_via_files(prompt: str, images: List[UploadFile]):
+    file_ids: List[str] = []
+    for f in images or []:
+        if not f.content_type or not f.content_type.startswith("image/"):
+            raise HTTPException(status_code=415, detail=f"Unsupported type: {f.content_type}")
+
+        data = f.file.read()
+        uploaded = client.files.create(
+            file=(f.filename or "image", data, f.content_type),
+            purpose="user_data",
         )
+        file_ids.append(uploaded.id)
 
-    # content_blocks 구성: 텍스트 + 여러 이미지(바이트)
-    content_blocks = [{"type": "input_text", "text": prompt}]
-    for data in image_blobs:
-        content_blocks.append({"type": "input_image", "image_data": data})
+    content = [{
+        "type": "input_text",
+        "text": (
+            "prompt : " + prompt + "\n"
+            "사용자가 전송한 이미지 + prompt를 바탕으로 업로드한 파일/지식에서 "
+            "맞춤 전시 여러 개를 추천하고, 각 추천 이유도 생성해줘."
+        )
+    }]
 
-    # File Search 도구를 첨부하고, 구조화 파싱으로 Exhibition 받아오기
+    for fid in file_ids:
+        content.append({
+            "type": "input_image",
+            "file_id": fid   # ✅ 수정 포인트
+        })
+
     resp = client.responses.parse(
-        model="gpt-4.1-mini",
+        model="gpt-4o-mini",
         tools=[{
             "type": "file_search",
-            "vector_store_ids": [vs_id]
+            "vector_store_ids": [EXHBITION_STORE_ID]
         }],
-        input=[{
-            "role": "user",
-            "content": content_blocks
-        }],
-        text_format=Exhibition
+        input=[{"role": "user", "content": content}],
+        text_format=ExhibitionList,
     )
-    return resp.output_parsed
-
-from typing import Optional
-
-def process_images(images_info: list[dict], text: Optional[str] = None, vector_store_id: Optional[str] = None) -> Exhibition:
-    """
-    images_info의 각 항목은 다음 키를 가질 것을 권장:
-    {
-      "filename": str,
-      "content_type": str,
-      "size": int,
-      "bytes": bytes    # ★ 여기 필수 (OpenAI에 image_data로 보낼 바이트)
-    }
-    """
-    # 1) 안전하게 이미지 바이트만 추출
-    image_blobs: List[bytes] = []
-    for info in images_info:
-        data = info.get("bytes")
-        if not data:
-            # bytes가 없다면 스킵하거나 에러 처리 선택
-            # 여기선 스킵
-            continue
-        image_blobs.append(data)
-
-    # 2) 프롬프트(텍스트) 구성
-    prompt = f"{text} 이미지와 내 전시 지식에서 가장 잘 맞는 전시를 추천해줘. 이유와 관련 태그도 포함." if text else "이미지와 내 전시 지식에서 가장 잘 맞는 전시를 추천해줘. 이유와 관련 태그도 포함."
-    # 3) File Search + 이미지 비전 호출
-    exhibition = analyze_exhibition_with_images_and_fs(
-        prompt=prompt,
-        image_blobs=image_blobs,
-        vector_store_id=vector_store_id,
-    )
-    return exhibition
+    return resp.output_parsed.items

@@ -1,14 +1,16 @@
 from fastapi import FastAPI
-from openai import OpenAI
 from dotenv import load_dotenv
 from pydantic import BaseModel
 import os
+from fastapi.encoders import jsonable_encoder
 from ai_service import analyze_exhibition
 from datetime import date
 from typing import List, Optional
 from fastapi import File, UploadFile,Form, HTTPException
-from recommend import Exhibition, process_images
+from recommend import ask_with_images_via_files
 from upload import save_exhibition_to_vector_store
+import base64
+
 load_dotenv()
 
 
@@ -23,7 +25,7 @@ class AiTagRequest(BaseModel):
     startDate: date
     endDate: date
     teamName: str
-    location: Optional[str] = None
+    location: str
     description: str
     posterImageUrl: str
     artworkImages: List[str]
@@ -63,27 +65,33 @@ class AiTagResponse(BaseModel):
     tags: List[str]
     message: Optional[str] = None
 
-@app.post("/recommend", response_model=Exhibition)  # Exhibition으로 직접 반환해도 되고, AiTagResponse로 감싸도 됨
+# @app.post("/recommend", response_model=List[Exhibition])  # ← 리스트로 변경
+# async def recommend(
+#     text: Optional[str] = Form(None),
+#     artworkImages: Optional[List[UploadFile]] = File(None)
+# ):
+#     images_info = []
+#     if artworkImages:
+#         for f in artworkImages:
+#             if not f.content_type or not f.content_type.startswith("image/"):
+#                 raise HTTPException(status_code=415,
+#                                     detail=f"Unsupported type: {f.content_type}")
+#             data = await f.read()
+#             images_info.append({
+#                 "filename": f.filename,
+#                 "content_type": f.content_type,
+#                 "size": len(data),
+#                 "_bytes": data,  # 내부 전용 키(직렬화 방지)
+#             })
+
+#     exhibitions = process_images(images_info, text, EXHIBITION_STORE_ID)  # List[Exhibition]
+#     return jsonable_encoder(exhibitions)
+
+@app.post("/recommend")
 async def recommend(
     text: Optional[str] = Form(None),
     artworkImages: Optional[List[UploadFile]] = File(None)
 ):
-    images_info = []
 
-    if artworkImages:
-        for f in artworkImages:
-            if not f.content_type or not f.content_type.startswith("image/"):
-                raise HTTPException(status_code=415, detail=f"Unsupported type: {f.content_type}")
-            data = await f.read()  # ★ 실제 바이트
-            images_info.append({
-                "filename": f.filename,
-                "content_type": f.content_type,
-                "size": len(data),
-                "bytes": data,      # ★ process_images에 넘길 핵심
-            })
-
-    # OpenAI + File Search로 추천
-    exhibition = process_images(images_info, text,EXHIBITION_STORE_ID)
-
-    # 필요하면 Exhibition에서 태그만 추려서 반환하는 DTO로 변환해도 됨
-    return exhibition
+    result = ask_with_images_via_files(text or "전시 추천해줘", artworkImages)
+    return {"recommendations": result}
