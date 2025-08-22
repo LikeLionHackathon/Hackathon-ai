@@ -12,7 +12,7 @@ EXHBITION_STORE_ID = os.getenv("EXHIBITION_STORE_ID")
 
 
 class Exhibition(BaseModel):
-    id: Optional[str] = None
+    id: Optional[int] = None
     title: Optional[str] = None
     description: Optional[str] = None
     location: Optional[str] = None

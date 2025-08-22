@@ -93,5 +93,5 @@ async def recommend(
     artworkImages: Optional[List[UploadFile]] = File(None)
 ):
 
-    result = ask_with_images_via_files(text or "전시 추천해줘", artworkImages)
+    result = ask_with_images_via_files("사용자 text : " + text + "사용자 text를 참고해서 우리 데이터 베이스에서 전시 정보 추천해줘, id는 중요한 정보이니 그대로 전달해줘" or "전시 추천해줘", artworkImages)
     return {"recommendations": result}

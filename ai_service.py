@@ -19,16 +19,6 @@ api_key = os.getenv("OPENAI_API_KEY")
 # 클라이언트 생성
 client = OpenAI(api_key=api_key)
 # Python
-def ensure_vector_store_exists(vector_store_id: str):
-    """Retrieve the vector store to validate the ID; raise a helpful error if invalid."""
-    try:
-        vs = client.vector_stores.retrieve(vector_store_id)
-        # Optional: print minimal info for debugging
-        print("[vector_store] ok:", getattr(vs, "id", vector_store_id))
-        return vs
-    except Exception as e:
-        # Surface a clear message up to the API layer
-        raise HTTPException(status_code=500, detail=f"Invalid VECTOR_STORE_ID '{vector_store_id}': {e}")
 
 class Exhibition(BaseModel):
     tags: list[str]
