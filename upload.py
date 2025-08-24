@@ -65,7 +65,6 @@ def save_exhibition_to_vector_store(
         "title": _get(req, "title"),
         "startDate": _to_iso(_get(req, "startDate")),
         "endDate": _to_iso(_get(req, "endDate")),
-        "teamName": _get(req, "teamName"),
         "location": _get(req, "location"),
         "description": _get(req, "description"),
         "posterImageUrl": _get(req, "posterImageUrl"),

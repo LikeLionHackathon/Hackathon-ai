@@ -24,7 +24,6 @@ class AiTagRequest(BaseModel):
     title: str
     startDate: date
     endDate: date
-    teamName: str
     location: str
     description: str
     posterImageUrl: str
