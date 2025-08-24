@@ -23,14 +23,14 @@ EXHBITION_STORE_ID = os.getenv("EXHIBITION_STORE_ID")
 
 
 # 파일 목록 조회
-files = client.vector_stores.files.list(vector_store_id=EXHBITION_STORE_ID)
-
-for f in files.data:
-    file_info = client.files.retrieve(f.id)
-    print(f"파일명: {file_info.filename}, 상태: {f.status}, 파일 ID: {f.id}")
-
-# 파일 삭제
 # files = client.vector_stores.files.list(vector_store_id=EXHBITION_STORE_ID)
 
 # for f in files.data:
-#     client.vector_stores.files.delete(vector_store_id=EXHBITION_STORE_ID, file_id=f.id)
+#     file_info = client.files.retrieve(f.id)
+#     print(f"파일명: {file_info.filename}, 상태: {f.status}, 파일 ID: {f.id}")
+
+# 파일 삭제
+files = client.vector_stores.files.list(vector_store_id=EXHBITION_STORE_ID)
+
+for f in files.data:
+    client.vector_stores.files.delete(vector_store_id=EXHBITION_STORE_ID, file_id=f.id)

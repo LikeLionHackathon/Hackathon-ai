@@ -120,5 +120,6 @@ def ask_with_images_via_files(prompt: str, images: List[UploadFile]):
         }],
         input=[{"role": "user", "content": content}],
         text_format=ExhibitionList,
+        timeout =120
     )
     return resp.output_parsed.items
