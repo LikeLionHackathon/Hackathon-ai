@@ -113,7 +113,7 @@ def ask_with_images_via_files(prompt: str, images: List[UploadFile]):
         })
 
     resp = client.responses.parse(
-        model="gpt-4o-mini",
+        model="gpt-4o",
         tools=[{
             "type": "file_search",
             "vector_store_ids": [EXHBITION_STORE_ID]
